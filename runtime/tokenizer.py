@@ -13,7 +13,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, List, Set
 
-
 @dataclass
 class Token:
     """A single token produced by the lexer.
@@ -31,6 +30,56 @@ class Token:
     line: int
     column: int
 
+# ------------------------------------------------------------------
+# OPERATORS
+# ------------------------------------------------------------------
+
+OPERATOR_TYPE_MAP = {
+    # assignment
+    "=": "ASSIGN",
+    "+=": "PLUS_ASSIGN",
+    "-=": "MINUS_ASSIGN",
+    "*=": "MULTIPLY_ASSIGN",
+    "/=": "DIVIDE_ASSIGN",
+    "%=": "MOD_ASSIGN",
+    "**=": "POWER_ASSIGN",  # if you support **=
+    # comparison
+    "==": "EQUALS",
+    "===": "STRICT_EQUALS",
+    "!=": "NOT_EQUALS",
+    "!==": "STRICT_NOT_EQUALS",
+    "<": "LESS",
+    ">": "GREATER",
+    "<=": "LESS_EQUAL",
+    ">=": "GREATER_EQUAL",
+    # logical
+    "&&": "LOGICAL_AND",
+    "||": "LOGICAL_OR",
+    "!": "BANG",
+    # arithmetic
+    "+": "PLUS",
+    "-": "MINUS",
+    "*": "MULTIPLY",
+    "/": "DIVIDE",
+    "%": "MOD",
+    "**": "POWER",  # if you use it
+}
+
+# ------------------------------------------------------------------
+# PUNCTUATION
+# ------------------------------------------------------------------
+
+PUNCTUATION_TYPE_MAP = {
+    ";": "SEMICOLON",
+    "(": "LPAREN",
+    ")": "RPAREN",
+    "{": "LBRACE",
+    "}": "RBRACE",
+    "[": "LBRACKET",
+    "]": "RBRACKET",
+    ",": "COMMA",
+    ".": "DOT",
+}
 
 class Tokenizer:
     """Lexical analyser (tokenizer) for a subset of JavaScript.
@@ -87,8 +136,8 @@ class Tokenizer:
         "while": "WHILE",
         "function": "FUNCTION",
         "return": "RETURN",
-        "true": "TRUE",
-        "false": "FALSE",
+        "true": "BOOLEAN",
+        "false": "BOOLEAN",
         "null": "NULL",
         "undefined": "UNDEFINED",
     }
@@ -102,17 +151,19 @@ class Tokenizer:
         "+", "-", "*", "/", "%", "=", "<", ">", "!",
     ]
 
+
     # Token types that cannot be immediately followed by a unary minus
     # (the minus would be interpreted as the binary subtraction operator).
     _UNARY_MINUS_DISALLOWED_AFTER: Set[str] = {
         "IDENTIFIER",
         "NUMBER",
         "STRING",
-        "TRUE",
-        "FALSE",
+        "BOOLEAN",   
         "NULL",
         "UNDEFINED",
-        ")", "]", "}",
+        "RPAREN",    
+        "RBRACKET",  
+        "RBRACE",    
     }
 
     # ------------------------------------------------------------------
@@ -205,9 +256,17 @@ class Tokenizer:
 
             # --- Operators (longest match) ---
             matched = False
+            # for op in self.OPERATORS:
+            #     if self.source.startswith(op, self.pos):
+            #         self.tokens.append(Token(op, op, start_line, start_col))
+            #         self.pos += len(op)
+            #         self.column += len(op)
+            #         matched = True
+            #         break
             for op in self.OPERATORS:
                 if self.source.startswith(op, self.pos):
-                    self.tokens.append(Token(op, op, start_line, start_col))
+                    token_type = OPERATOR_TYPE_MAP.get(op, op)  # fallback, but all should be mapped
+                    self.tokens.append(Token(token_type, op, start_line, start_col))
                     self.pos += len(op)
                     self.column += len(op)
                     matched = True
@@ -216,8 +275,10 @@ class Tokenizer:
                 continue
 
             # --- Punctuation ---
-            if ch in ";(){}[],.":
-                self.tokens.append(Token(ch, ch, start_line, start_col))
+
+            if ch in PUNCTUATION_TYPE_MAP:
+                token_type = PUNCTUATION_TYPE_MAP[ch]
+                self.tokens.append(Token(token_type, ch, start_line, start_col))
                 self.pos += 1
                 self.column += 1
                 continue
@@ -227,6 +288,8 @@ class Tokenizer:
                 f"Unexpected character {ch!r} at line {start_line}, column {start_col}"
             )
 
+        # Append EOF token
+        self.tokens.append(Token("EOF", "", self.line, self.column))
         return self.tokens
 
     # ------------------------------------------------------------------
@@ -309,8 +372,16 @@ class Tokenizer:
         self.pos += len(word)
         self.column += len(word)
 
+        # token_type = self.KEYWORD_TO_TYPE.get(word, "IDENTIFIER")
+        # self.tokens.append(Token(token_type, word, line, col))
         token_type = self.KEYWORD_TO_TYPE.get(word, "IDENTIFIER")
-        self.tokens.append(Token(token_type, word, line, col))
+        if token_type == "BOOLEAN":
+            value = True if word == "true" else False
+        elif token_type == "NULL":
+            value = None
+        else:
+            value = word
+        self.tokens.append(Token(token_type, value, line, col))
 
     def _lex_number(self, line: int, col: int, *, negative: bool) -> None:
         """Tokenise a numeric literal (possibly negative)."""
