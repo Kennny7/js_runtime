@@ -44,10 +44,16 @@ class Visitor(ABC):
     @abstractmethod
     def visit_Program(self, node: 'Program') -> Any: ...
 
+    @abstractmethod
+    def visit_SpreadElement(self, node: 'SpreadElement') -> Any: ...
+
     # -- Statements & Declarations ------------------------------------------
 
     @abstractmethod
     def visit_VariableDeclaration(self, node: 'VariableDeclaration') -> Any: ...
+
+    @abstractmethod
+    def visit_VariableDeclarator(self, node: 'VariableDeclarator') -> Any: ...
 
     @abstractmethod
     def visit_BlockStatement(self, node: 'BlockStatement') -> Any: ...
@@ -112,6 +118,9 @@ class Visitor(ABC):
     def visit_ArrayExpression(self, node: 'ArrayExpression') -> Any: ...
 
     @abstractmethod
+    def visit_ArrayLiteral(self, node: 'ArrayLiteral') -> Any: ...
+
+    @abstractmethod
     def visit_ObjectExpression(self, node: 'ObjectExpression') -> Any: ...
 
     @abstractmethod
@@ -134,28 +143,19 @@ class Visitor(ABC):
 # ---------------------------------------------------------------------------
 
 @dataclass
+class SpreadElement(ASTNode):
+    argument: ASTNode
+
+    def accept(self, visitor: Visitor) -> Any:
+        return visitor.visit_SpreadElement(self)
+
+@dataclass
 class Program(ASTNode):
     """Top‑level node: a complete script or module."""
     body: List[ASTNode]
 
     def accept(self, visitor: Visitor) -> Any:
         return visitor.visit_Program(self)
-
-
-@dataclass
-class VariableDeclaration(ASTNode):
-    """A ``let`` or ``const`` declaration.
-
-    Attributes:
-        kind: ``"let"`` or ``"const"``.
-        declarations: Each element is ``(name, init)`` where *name* is the
-            identifier string and *init* is an optional initialiser expression.
-    """
-    kind: str
-    declarations: List[Tuple[str, Optional[ASTNode]]]
-
-    def accept(self, visitor: Visitor) -> Any:
-        return visitor.visit_VariableDeclaration(self)
 
 
 @dataclass
@@ -166,6 +166,36 @@ class Identifier(ASTNode):
     def accept(self, visitor: Visitor) -> Any:
         return visitor.visit_Identifier(self)
 
+
+@dataclass
+class VariableDeclarator(ASTNode):
+    """A single binding in a ``let`` or ``const`` declaration.
+
+    Attributes:
+        id: The variable name.
+        init: The initialiser expression, or ``None``.
+    """
+    id: Identifier
+    init: Optional[ASTNode] = None
+
+    def accept(self, visitor: Visitor) -> Any:
+        return visitor.visit_VariableDeclarator(self)
+
+
+@dataclass
+class VariableDeclaration(ASTNode):
+    """A ``let`` or ``const`` declaration.
+
+    Attributes:
+        kind: ``"let"`` or ``"const"``.
+        declarations: One or more :class:`VariableDeclarator` nodes.
+    """
+    kind: str
+    declarations: List[VariableDeclarator]
+
+    def accept(self, visitor: Visitor) -> Any:
+        return visitor.visit_VariableDeclaration(self)
+    
 
 @dataclass
 class Literal(ASTNode):
@@ -295,18 +325,6 @@ class FunctionDeclaration(ASTNode):
     def accept(self, visitor: Visitor) -> Any:
         return visitor.visit_FunctionDeclaration(self)
 
-
-@dataclass
-class FunctionExpression(ASTNode):
-    """A function expression (may be anonymous)."""
-    id: Optional[Identifier]
-    params: List[Identifier]
-    body: BlockStatement
-
-    def accept(self, visitor: Visitor) -> Any:
-        return visitor.visit_FunctionExpression(self)
-
-
 @dataclass
 class CallExpression(ASTNode):
     """Function or method call: ``callee(arguments)``."""
@@ -334,6 +352,16 @@ class ArrayExpression(ASTNode):
     def accept(self, visitor: Visitor) -> Any:
         return visitor.visit_ArrayExpression(self)
 
+@dataclass
+class ArrayLiteral(ASTNode):
+    """Array literal, e.g., ``[1, 2, a]``.
+
+    Alias for ``ArrayExpression``; used by the parser directly.
+    """
+    elements: List[ASTNode]
+
+    def accept(self, visitor: Visitor) -> Any:
+        return visitor.visit_ArrayLiteral(self)
 
 @dataclass
 class ObjectExpression(ASTNode):
@@ -441,6 +469,17 @@ class CatchClause(ASTNode):
     def accept(self, visitor: Visitor) -> Any:
         return visitor.visit_CatchClause(self)
 
+@dataclass
+class FunctionExpression(ASTNode):
+    """A standard function expression or anonymous function."""
+    id: Optional[Identifier]      # The function name (None if anonymous)
+    params: List[Identifier]      # List of parameter nodes
+    body: ASTNode                 # BlockStatement representing the function body
+
+    def accept(self, visitor: Visitor) -> Any:
+        return visitor.visit_FunctionExpression(self)
+
+
 
 # ---------------------------------------------------------------------------
 # Module public API
@@ -450,6 +489,7 @@ __all__ = [
     "Visitor",
     "Program",
     "VariableDeclaration",
+    "VariableDeclarator",
     "Identifier",
     "Literal",
     "BinaryExpression",
@@ -467,6 +507,7 @@ __all__ = [
     "CallExpression",
     "ReturnStatement",
     "ArrayExpression",
+    "ArrayLiteral",
     "ObjectExpression",
     "Property",
     "MemberExpression",
