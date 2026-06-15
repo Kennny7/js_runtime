@@ -129,6 +129,10 @@ class Tokenizer:
         "false",
         "null",
         "undefined",
+        "try", 
+        "catch", 
+        "finally",
+        "throw",
     }
 
     KEYWORD_TO_TYPE: dict[str, str] = {
@@ -144,6 +148,10 @@ class Tokenizer:
         "false": "BOOLEAN",
         "null": "NULL",
         "undefined": "UNDEFINED",
+        "try": "TRY",          
+        "catch": "CATCH",
+        "finally": "FINALLY",
+        "throw": "THROW",
     }
 
     # ------------------------------------------------------------------
