@@ -34,6 +34,8 @@ from .ast_nodes import (
     Literal,
     Identifier,
     ArrayLiteral,
+    UpdateExpression,
+    SpreadElement 
 )
 # We assume the tokenizer module exports a Token class with:
 #   type: str   (e.g. 'NUMBER', 'IDENTIFIER', ...)
@@ -234,9 +236,6 @@ class Parser:
             init_expr = None
             
             if self._match("ASSIGN"):          
-                # FIX: Call _assignment() or your equivalent assignment/ternary/binary 
-                # value parser instead of the top-level _expression(). This prevents 
-                # the parser from getting confused by trailing tokens or commas.
                 init_expr = self._assignment() 
                 
             return VariableDeclarator(
@@ -372,12 +371,21 @@ class Parser:
             "MOD_ASSIGN",
         ):
             op_token = self._advance()
-            operator = op_token.type
+            # Map token type to the actual operator string (e.g. "PLUS_ASSIGN" -> "+=")
+            assign_op_map = {
+                "ASSIGN": "=",
+                "PLUS_ASSIGN": "+=",
+                "MINUS_ASSIGN": "-=",
+                "MULTIPLY_ASSIGN": "*=",
+                "DIVIDE_ASSIGN": "/=",
+                "MOD_ASSIGN": "%=",
+            }
+            operator = assign_op_map.get(op_token.type, op_token.type)
             # Right‑associative: the right side is another assignment
             right = self._assignment()
             return AssignmentExpression(operator=operator, left=left, right=right)
         return left
-
+    
     def _logical_or(self):
         """Parse logical OR (``||``), left‑associative."""
         left = self._logical_and()
@@ -440,17 +448,6 @@ class Parser:
             left = BinaryExpression(operator=operator_str, left=left, right=right)
         return left
 
-    def _multiplicative(self):
-        """Parse multiplicative expressions (``*``, ``/``, ``%``)."""
-        left = self._unary()
-        while self._match("MULTIPLY", "DIVIDE", "MOD"):
-            operator = self._previous().type
-            op_map = {"MULTIPLY": "*", "DIVIDE": "/", "MOD": "%"}
-            operator_str = op_map[operator]
-            right = self._unary()
-            left = BinaryExpression(operator=operator_str, left=left, right=right)
-        return left
-
     def _unary(self):
         """Parse unary expressions (``!``, ``-``)."""
         if self._check("BANG", "MINUS"):
@@ -461,6 +458,28 @@ class Parser:
             right = self._unary()
             return UnaryExpression(operator=operator_str, argument=right)
         return self._postfix()
+
+
+    def _power(self):
+        """Parse exponentiation (``**``), right‑associative."""
+        left = self._unary()
+        while self._match("POWER"):          # "POWER" is the token type for **
+            operator = "**"
+            right = self._power()            # right-associative → recurse here
+            left = BinaryExpression(operator=operator, left=left, right=right)
+        return left
+
+    def _multiplicative(self):
+        """Parse multiplicative expressions (``*``, ``/``, ``%``)."""
+        left = self._power()   # <-- was self._unary()
+        while self._match("MULTIPLY", "DIVIDE", "MOD"):
+            operator = self._previous().type
+            op_map = {"MULTIPLY": "*", "DIVIDE": "/", "MOD": "%"}
+            operator_str = op_map[operator]
+            right = self._unary()
+            left = BinaryExpression(operator=operator_str, left=left, right=right)
+        return left
+
 
     def _postfix(self):
         """Parse postfix operations: function calls and member access.
@@ -491,6 +510,10 @@ class Parser:
                 prop = self._expression()
                 self._expect("RBRACKET", "Expected ']' after computed property.")
                 expr = MemberExpression(object=expr, property=prop, computed=True)
+            elif self._match("INCREMENT", "DECREMENT"):
+                operator = self._previous().type
+                op_map = {"INCREMENT": "++", "DECREMENT": "--"}
+                expr = UpdateExpression(operator=op_map[operator], argument=expr, prefix=False)
             else:
                 break
         return expr
@@ -529,15 +552,20 @@ class Parser:
         if self._match("LBRACKET"):
             elements: List = []
             if not self._check("RBRACKET"):
-                elements.append(self._expression())
-                while self._match("COMMA"):
-                    # Allow trailing comma
-                    if self._check("RBRACKET"):
+                while True:
+                    if self._match("SPREAD"):
+                        # SpreadElement expects the argument (Identifier, ...)
+                        arg = self._assignment()
+                        elements.append(SpreadElement(argument=arg))
+                    else:
+                        elements.append(self._expression())
+                    if not self._match("COMMA"):
                         break
-                    elements.append(self._expression())
+                    if self._check("RBRACKET"):
+                        break   # trailing comma
             self._expect("RBRACKET", "Expected ']' after array elements.")
             return ArrayLiteral(elements=elements)
-
+        
         # Nothing matched -> error
         self._error(
             f"Unexpected token '{self._peek().type}' ({self._peek().value})."
