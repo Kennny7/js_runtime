@@ -60,6 +60,9 @@ flowchart TD
 
 ```bash
 python main.py sample.js
+
+# For example (windows cmd):
+python main.py tests\sample_one.js
 ```
 
 ### From stdin
