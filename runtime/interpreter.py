@@ -292,6 +292,10 @@ class JSArray:
         """Create a new array with elements that pass the test."""
         return JSArray([element for element in self._elements if is_truthy(callback(element))])
 
+    def reverse(self) -> 'JSArray':
+        """Reverse the array in place and return itself (JS behaviour)."""
+        self._elements.reverse()
+        return self
 
 # ---------------------------------------------------------------------------
 # JavaScript function object
@@ -424,7 +428,6 @@ class Interpreter(Visitor):
             self.visit(node.alternate)
 
     def visit_ForStatement(self, node: ForStatement) -> None:
-        """Standard ``for`` loop."""
         if node.init is not None:
             self.visit(node.init)
         while True:
@@ -432,7 +435,9 @@ class Interpreter(Visitor):
                 break
             self.visit(node.body)
             if node.update is not None:
+                before = self.env.lookup('j') if self.env.has('j') else None
                 self.visit(node.update)
+                after = self.env.lookup('j') if self.env.has('j') else None
 
     def visit_WhileStatement(self, node: WhileStatement) -> None:
         """Standard ``while`` loop."""
@@ -505,8 +510,6 @@ class Interpreter(Visitor):
             
         value = self.visit(node.value)
         return (key, value)
-
-
 
     def visit_UpdateExpression(self, node: UpdateExpression) -> Any:
         assert isinstance(node.argument, Identifier)
@@ -660,7 +663,9 @@ class Interpreter(Visitor):
             if isinstance(left, str) and isinstance(right, str):
                 return left >= right
             return to_number(left) >= to_number(right)
-
+        if op == "**":
+            return to_number(left) ** to_number(right)
+        
         logger.error(f"Unknown binary operator '{op}'")
         return UNDEFINED
 
@@ -699,10 +704,21 @@ class Interpreter(Visitor):
         return self._get_property(obj, prop)
 
     def visit_ArrayLiteral(self, node: ArrayLiteral) -> JSArray:
-        """Create a :class:`JSArray` from an array literal."""
-        elements = [self.visit(el) for el in node.elements]
-        return JSArray(elements)
-
+        arr = JSArray()
+        for el in node.elements:
+            if isinstance(el, SpreadElement):
+                # Evaluate the spread argument and flatten its elements
+                iterable = self.visit(el.argument)
+                if isinstance(iterable, JSArray):
+                    for item in iterable._elements:
+                        arr.push(item)
+                else:
+                    # For other iterables (strings, etc.), fall back
+                    for item in iterable:
+                        arr.push(item)
+            else:
+                arr.push(self.visit(el))
+        return arr
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -856,6 +872,8 @@ class Interpreter(Visitor):
                 "slice": str.__getitem__,
                 "indexOf": str.find,
                 "length": None,
+                # JavaScript split: empty separator → array of characters, otherwise usual split
+                "split": lambda s, sep=None: JSArray(list(s)) if sep == "" else JSArray(s.split(sep)),
             }
             # Assigning this explicitly-typed dictionary will not trigger errors
             self._string_methods = methods_dict
@@ -869,4 +887,6 @@ class Interpreter(Visitor):
                         self._string_methods[attr_name] = attr
             except ImportError:
                 pass
+            # Force our own split to handle empty separator properly
+            self._string_methods["split"] = lambda s, sep=None: JSArray(list(s)) if sep == "" else JSArray(s.split(sep))
         return self._string_methods.get(name)
