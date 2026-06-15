@@ -35,7 +35,10 @@ from .ast_nodes import (
     Identifier,
     ArrayLiteral,
     UpdateExpression,
-    SpreadElement 
+    SpreadElement,
+    ThrowStatement,
+    TryStatement,
+    CatchClause,
 )
 # We assume the tokenizer module exports a Token class with:
 #   type: str   (e.g. 'NUMBER', 'IDENTIFIER', ...)
@@ -188,6 +191,10 @@ class Parser:
             return self._return_statement()
         if self._check("LBRACE"):
             return self._block_statement()
+        if self._check("THROW"):
+            return self._throw_statement()
+        if self._check("TRY"):
+            return self._try_statement()
         # Must be an expression statement
         return self._expression_statement()
 
@@ -352,6 +359,35 @@ class Parser:
         self._expect("SEMICOLON", "Expected ';' after return.")
         return ReturnStatement(argument=value)
 
+    def _throw_statement(self) -> 'ThrowStatement':
+        self._expect("THROW", "Expected 'throw'.")
+        value = self._expression()
+        self._expect("SEMICOLON", "Expected ';' after throw.")
+        return ThrowStatement(argument=value)
+
+    def _try_statement(self) -> TryStatement:
+        self._expect("TRY", "Expected 'try'.")
+        block = self._block_statement()
+
+        handler = None
+        if self._match("CATCH"):
+            # catch clause (either with or without parameter)
+            if self._match("LPAREN"):
+                param_token = self._expect("IDENTIFIER", "Expected catch parameter name.")
+                param = Identifier(param_token.value)
+                self._expect("RPAREN", "Expected ')' after catch parameter.")
+            else:
+                # Optional: JavaScript allows catch without parentheses (not standard, skip or handle)
+                param = None  # or raise an error
+            handler_body = self._block_statement()
+            handler = CatchClause(param=param, body=handler_body)
+
+        finalizer = None
+        if self._match("FINALLY"):
+            finalizer = self._block_statement()
+
+        return TryStatement(block=block, handler=handler, finalizer=finalizer)
+    
     # ------------------------------------------------------------------
     # Expression parsing (operator precedence)
     # ------------------------------------------------------------------
