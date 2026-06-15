@@ -118,3 +118,12 @@ class Environment:
         if self.enclosing is not None:
             return self.enclosing._find_environment(name)
         return None
+
+    def depth(self):
+        """Return the nesting depth (0 = global)."""
+        d = 0
+        env = self
+        while env.enclosing is not None:
+            d += 1
+            env = env.enclosing
+        return d
