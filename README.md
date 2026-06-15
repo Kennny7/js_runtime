@@ -68,7 +68,7 @@ python main.py tests\sample_one.js
 ### From stdin
 
 ```bash
-echo "let x = 5; console.log(x * 2);" | python main.py
+echo let x = 5; console.log(x * 2); | python main.py
 ```
 
 Direct inline argument support is not shown here because the current CLI is documented around file and pipe input modes.
