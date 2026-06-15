@@ -371,10 +371,8 @@ class Interpreter(Visitor):
         Args:
             program: The AST ``Program`` node.
         """
-        logger.info("Starting interpretation")
         for stmt in program.body:
             self.visit(stmt)
-        logger.info("Interpretation finished")
 
     # ------------------------------------------------------------------
     # Visitor methods for statements
