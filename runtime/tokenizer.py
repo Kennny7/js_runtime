@@ -62,7 +62,11 @@ OPERATOR_TYPE_MAP = {
     "*": "MULTIPLY",
     "/": "DIVIDE",
     "%": "MOD",
-    "**": "POWER",  # if you use it
+    "**": "POWER",
+    "++": "INCREMENT",
+    "--": "DECREMENT",
+    # syntax / punctuation
+    "...": "SPREAD"
 }
 
 # ------------------------------------------------------------------
@@ -146,9 +150,10 @@ class Tokenizer:
     # Operators (longest first to ensure greedy matching)
     # ------------------------------------------------------------------
     OPERATORS: List[str] = [
-        "===", "!==", "**", "==", "!=", "<=", ">=",
+        "===", "!==", "...", "**", "==", "!=", "<=", ">=",
         "&&", "||", "+=", "-=", "*=", "/=", "%=", "**=",
-        "+", "-", "*", "/", "%", "=", "<", ">", "!",
+        "++", "--",
+        "+", "-", "*", "/", "%", "=", "<", ">", "!",       
     ]
 
 
@@ -256,13 +261,6 @@ class Tokenizer:
 
             # --- Operators (longest match) ---
             matched = False
-            # for op in self.OPERATORS:
-            #     if self.source.startswith(op, self.pos):
-            #         self.tokens.append(Token(op, op, start_line, start_col))
-            #         self.pos += len(op)
-            #         self.column += len(op)
-            #         matched = True
-            #         break
             for op in self.OPERATORS:
                 if self.source.startswith(op, self.pos):
                     token_type = OPERATOR_TYPE_MAP.get(op, op)  # fallback, but all should be mapped
