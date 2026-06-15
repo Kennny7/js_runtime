@@ -14,6 +14,8 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from .environment import Environment, ReturnValue, ThrowValue
+
 from core.logger import Logger
 
 from .ast_nodes import (
@@ -556,16 +558,39 @@ class Interpreter(Visitor):
         )
         return func
 
-
     def visit_ThrowStatement(self, node: ThrowStatement) -> None:
         exception = self.visit(node.argument)
-        raise RuntimeError(exception)   # or a custom exception class
+        raise ThrowValue(exception)
 
     def visit_TryStatement(self, node: TryStatement) -> Any:
-        raise NotImplementedError("try/catch is not implemented yet")
+        handler = node.handler          # optional CatchClause
+        finalizer = node.finalizer      # optional BlockStatement
 
-    def visit_CatchClause(self, node: CatchClause) -> None:
-        raise NotImplementedError("catch clause not implemented")
+        try:
+            self.visit(node.block)
+        except ThrowValue as thrown:
+            if handler is not None:
+                # Execute the catch clause with the thrown value
+                self.visit_CatchClause(handler, thrown.value)
+            else:
+                # Re‑throw if no handler
+                raise
+        finally:
+            if finalizer is not None:
+                self.visit(finalizer)
+                
+    def visit_CatchClause(self, node: CatchClause, thrown_value: Any = UNDEFINED) -> None:
+        # Create a new scope for the catch block
+        previous = self.env
+        self.env = Environment(enclosing=previous)
+        try:
+            # Define the catch parameter with the thrown value
+            self.env.define(node.param.name, thrown_value)
+            # Execute the catch block body
+            for stmt in node.body.body:  # body is a BlockStatement
+                self.visit(stmt)
+        finally:
+            self.env = previous    
     # ------------------------------------------------------------------
     # Visitor methods for expressions
     # ------------------------------------------------------------------
