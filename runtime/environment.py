@@ -14,7 +14,12 @@ class ReturnValue(Exception):
         self.value = value
         super().__init__(f"Return: {value}")
 
-
+class ThrowValue(Exception):
+    """Exception raised when a ``throw`` statement is executed."""
+    def __init__(self, value: Any) -> None:
+        self.value = value
+        super().__init__(f"Throw: {value}")
+        
 class Environment:
     """Represents a variable scope with optional enclosing environment.
 
